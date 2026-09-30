@@ -8,7 +8,9 @@
     "dev": "nodemon src/server.js",
     "test": "cross-env NODE_ENV=test jest --runInBand --detectOpenHandles --forceExit",
     "test:watch": "cross-env NODE_ENV=test jest --watch",
-    "test:coverage": "cross-env NODE_ENV=test jest --coverage --runInBand --detectOpenHandles --forceExit"
+    "test:coverage": "cross-env NODE_ENV=test jest --coverage --runInBand --detectOpenHandles --forceExit",
+    "db:backup": "node scripts/backup-db.js",
+    "db:restore": "node scripts/restore-db.js"
   },
   "keywords": [
     "nodejs",

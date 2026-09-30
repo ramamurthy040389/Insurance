@@ -1,0 +1,38 @@
+[
+  {
+    "_id": "6abd41d4e071afde8b5c8142",
+    "agent_name": "Alex Watson",
+    "createdAt": "2026-09-30T17:07:32.441Z",
+    "updatedAt": "2026-09-30T17:07:32.441Z"
+  },
+  {
+    "_id": "6abd41d4e071afde8b5c850b",
+    "agent_name": "John Snow",
+    "createdAt": "2026-09-30T17:07:32.441Z",
+    "updatedAt": "2026-09-30T17:07:32.441Z"
+  },
+  {
+    "_id": "6abd41d4e071afde8b5c8818",
+    "agent_name": "Rita Ora",
+    "createdAt": "2026-09-30T17:07:32.441Z",
+    "updatedAt": "2026-09-30T17:07:32.441Z"
+  },
+  {
+    "_id": "6abd41eb82b24c72a4f6f2b4",
+    "agent_name": "Agent Alpha",
+    "createdAt": "2026-09-30T17:07:55.300Z",
+    "updatedAt": "2026-09-30T17:07:55.300Z"
+  },
+  {
+    "_id": "6abd41ececc68eaab58b8dbc",
+    "agent_name": "Agent Bravo",
+    "createdAt": "2026-09-30T17:07:56.782Z",
+    "updatedAt": "2026-09-30T17:07:56.782Z"
+  },
+  {
+    "_id": "6abd4d2f0f8b76cf04b4b7d9",
+    "agent_name": "Excel Agent",
+    "createdAt": "2026-09-30T17:55:59.752Z",
+    "updatedAt": "2026-09-30T17:55:59.752Z"
+  }
+]

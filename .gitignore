@@ -20,6 +20,9 @@ coverage/
 uploads/*
 !uploads/.gitkeep
 
+# Database backups (keep latest tracked or .gitkeep)
+backups/backup-*
+
 # OS / Editor temporary files
 .DS_Store
 Thumbs.db

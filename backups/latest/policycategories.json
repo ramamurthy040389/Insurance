@@ -1,0 +1,134 @@
+[
+  {
+    "_id": "6abd41d4e071afde8b5c8145",
+    "categoryName": "Commercial Auto",
+    "createdAt": "2026-09-30T17:07:33.075Z",
+    "updatedAt": "2026-09-30T17:07:33.075Z"
+  },
+  {
+    "_id": "6abd41d4e071afde8b5c814e",
+    "categoryName": "Personal Auto",
+    "createdAt": "2026-09-30T17:07:33.075Z",
+    "updatedAt": "2026-09-30T17:07:33.075Z"
+  },
+  {
+    "_id": "6abd41d4e071afde8b5c8156",
+    "categoryName": "Homeowners",
+    "createdAt": "2026-09-30T17:07:33.075Z",
+    "updatedAt": "2026-09-30T17:07:33.075Z"
+  },
+  {
+    "_id": "6abd41d4e071afde8b5c8171",
+    "categoryName": "Business Owners",
+    "createdAt": "2026-09-30T17:07:33.075Z",
+    "updatedAt": "2026-09-30T17:07:33.075Z"
+  },
+  {
+    "_id": "6abd41d4e071afde8b5c8175",
+    "categoryName": "General Liability",
+    "createdAt": "2026-09-30T17:07:33.075Z",
+    "updatedAt": "2026-09-30T17:07:33.075Z"
+  },
+  {
+    "_id": "6abd41d4e071afde8b5c817b",
+    "categoryName": "Commercial Package",
+    "createdAt": "2026-09-30T17:07:33.075Z",
+    "updatedAt": "2026-09-30T17:07:33.075Z"
+  },
+  {
+    "_id": "6abd41d4e071afde8b5c81cd",
+    "categoryName": "Commercial Property",
+    "createdAt": "2026-09-30T17:07:33.075Z",
+    "updatedAt": "2026-09-30T17:07:33.075Z"
+  },
+  {
+    "_id": "6abd41d4e071afde8b5c81df",
+    "categoryName": "Worker's Compensation",
+    "createdAt": "2026-09-30T17:07:33.075Z",
+    "updatedAt": "2026-09-30T17:07:33.075Z"
+  },
+  {
+    "_id": "6abd41d4e071afde8b5c8216",
+    "categoryName": "Personal Umbrella",
+    "createdAt": "2026-09-30T17:07:33.075Z",
+    "updatedAt": "2026-09-30T17:07:33.075Z"
+  },
+  {
+    "_id": "6abd41d4e071afde8b5c8249",
+    "categoryName": "Commercial Umbrella",
+    "createdAt": "2026-09-30T17:07:33.075Z",
+    "updatedAt": "2026-09-30T17:07:33.075Z"
+  },
+  {
+    "_id": "6abd41d4e071afde8b5c824d",
+    "categoryName": "Bond",
+    "createdAt": "2026-09-30T17:07:33.075Z",
+    "updatedAt": "2026-09-30T17:07:33.075Z"
+  },
+  {
+    "_id": "6abd41d4e071afde8b5c8250",
+    "categoryName": "Commercial Inland Marine",
+    "createdAt": "2026-09-30T17:07:33.075Z",
+    "updatedAt": "2026-09-30T17:07:33.075Z"
+  },
+  {
+    "_id": "6abd41d4e071afde8b5c82a0",
+    "categoryName": "Errors and Omissions",
+    "createdAt": "2026-09-30T17:07:33.075Z",
+    "updatedAt": "2026-09-30T17:07:33.075Z"
+  },
+  {
+    "_id": "6abd41d4e071afde8b5c82a7",
+    "categoryName": "Excess Liability",
+    "createdAt": "2026-09-30T17:07:33.075Z",
+    "updatedAt": "2026-09-30T17:07:33.075Z"
+  },
+  {
+    "_id": "6abd41d4e071afde8b5c82c8",
+    "categoryName": "Flood - Personal",
+    "createdAt": "2026-09-30T17:07:33.075Z",
+    "updatedAt": "2026-09-30T17:07:33.075Z"
+  },
+  {
+    "_id": "6abd41d4e071afde8b5c82f4",
+    "categoryName": "Condo",
+    "createdAt": "2026-09-30T17:07:33.075Z",
+    "updatedAt": "2026-09-30T17:07:33.075Z"
+  },
+  {
+    "_id": "6abd41d4e071afde8b5c83d0",
+    "categoryName": "Watercraft (Small Boat)",
+    "createdAt": "2026-09-30T17:07:33.075Z",
+    "updatedAt": "2026-09-30T17:07:33.075Z"
+  },
+  {
+    "_id": "6abd41d4e071afde8b5c8435",
+    "categoryName": "Dwelling Fire",
+    "createdAt": "2026-09-30T17:07:33.075Z",
+    "updatedAt": "2026-09-30T17:07:33.075Z"
+  },
+  {
+    "_id": "6abd41d4e071afde8b5c8461",
+    "categoryName": "Renters",
+    "createdAt": "2026-09-30T17:07:33.075Z",
+    "updatedAt": "2026-09-30T17:07:33.075Z"
+  },
+  {
+    "_id": "6abd41eb82b24c72a4f6f2b7",
+    "categoryName": "Auto",
+    "createdAt": "2026-09-30T17:07:55.310Z",
+    "updatedAt": "2026-09-30T17:07:55.310Z"
+  },
+  {
+    "_id": "6abd41ececc68eaab58b8dbf",
+    "categoryName": "Flex Auto",
+    "createdAt": "2026-09-30T17:07:56.793Z",
+    "updatedAt": "2026-09-30T17:07:56.793Z"
+  },
+  {
+    "_id": "6abd41ececc68eaab58b8dc1",
+    "categoryName": "Flex Home",
+    "createdAt": "2026-09-30T17:07:56.793Z",
+    "updatedAt": "2026-09-30T17:07:56.793Z"
+  }
+]
