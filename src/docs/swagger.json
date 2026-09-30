@@ -1,0 +1,665 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "Insurance Policy Management System API",
+    "version": "1.0.0",
+    "description": "Production-grade RESTful API for Insurance Policy Management, Multi-Threaded Bulk Ingestion, Policy Search, Aggregated Summaries, CPU Monitoring, and Scheduled Message Dispatching.",
+    "contact": {
+      "name": "Backend Engineering Team"
+    }
+  },
+  "servers": [
+    {
+      "url": "http://localhost:3000",
+      "description": "Local Development Server"
+    }
+  ],
+  "tags": [
+    {
+      "name": "System",
+      "description": "System health, root metadata, and operational status"
+    },
+    {
+      "name": "Policies",
+      "description": "Policy ingestion, multi-criteria user search, and aggregated analytics"
+    },
+    {
+      "name": "Messages",
+      "description": "Scheduled notifications and worker-based message processing"
+    }
+  ],
+  "paths": {
+    "/": {
+      "get": {
+        "summary": "Root API Information",
+        "description": "Returns basic service metadata, documentation URL, and health check route.",
+        "tags": ["System"],
+        "responses": {
+          "200": {
+            "description": "API metadata retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "name": { "type": "string", "example": "Insurance Policy Management System API" },
+                    "version": { "type": "string", "example": "1.0.0" },
+                    "docs": { "type": "string", "example": "/api-docs" },
+                    "health": { "type": "string", "example": "/health" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "summary": "Application Health & Database Connectivity Check",
+        "description": "Inspects system health, process uptime, MongoDB connection readyState, and memory allocation.",
+        "tags": ["System"],
+        "responses": {
+          "200": {
+            "description": "System is healthy and database is connected",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "status": { "type": "string", "example": "UP" },
+                    "timestamp": { "type": "string", "format": "date-time", "example": "2026-09-30T16:30:00.000Z" },
+                    "uptime": { "type": "number", "example": 145.28 },
+                    "database": { "type": "string", "example": "UP" },
+                    "memoryUsage": {
+                      "type": "object",
+                      "properties": {
+                        "rss": { "type": "integer", "example": 89456720 },
+                        "heapTotal": { "type": "integer", "example": 45678912 },
+                        "heapUsed": { "type": "integer", "example": 28345610 },
+                        "external": { "type": "integer", "example": 3456780 }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/policies/import": {
+      "post": {
+        "summary": "Bulk Import Policies via Worker Thread",
+        "description": "Asynchronously offloads CSV or Excel (.xlsx/.xls) parsing, data normalization, master entity deduplication across six collections (agents, users, accounts, policycategories, policycarriers, policies), and idempotent bulk upserts to dedicated Node.js Worker Threads.",
+        "tags": ["Policies"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "file": {
+                    "type": "string",
+                    "format": "binary",
+                    "description": "CSV or Excel spreadsheet (.csv, .xlsx, .xls) containing policy and insured client records (up to 50MB)"
+                  }
+                },
+                "required": ["file"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Bulk import completed successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "example": true },
+                    "summary": {
+                      "type": "object",
+                      "properties": {
+                        "totalRows": { "type": "integer", "example": 1198 },
+                        "processed": { "type": "integer", "example": 1198 },
+                        "inserted": { "type": "integer", "example": 1198 },
+                        "updated": { "type": "integer", "example": 0 },
+                        "skipped": { "type": "integer", "example": 0 },
+                        "failed": { "type": "integer", "example": 0 },
+                        "insertedCounts": {
+                          "type": "object",
+                          "properties": {
+                            "agents": { "type": "integer", "example": 3 },
+                            "users": { "type": "integer", "example": 1149 },
+                            "accounts": { "type": "integer", "example": 1193 },
+                            "categories": { "type": "integer", "example": 19 },
+                            "carriers": { "type": "integer", "example": 46 },
+                            "policies": { "type": "integer", "example": 1198 }
+                          }
+                        }
+                      }
+                    },
+                    "entities": {
+                      "type": "object",
+                      "properties": {
+                        "agents": { "type": "integer", "example": 3 },
+                        "users": { "type": "integer", "example": 1149 },
+                        "accounts": { "type": "integer", "example": 1193 },
+                        "categories": { "type": "integer", "example": 19 },
+                        "carriers": { "type": "integer", "example": 46 },
+                        "policies": { "type": "integer", "example": 1198 }
+                      }
+                    },
+                    "validationErrors": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "row": { "type": "integer", "example": 15 },
+                          "policyNumber": { "type": "string", "example": "POL-ERR-001" },
+                          "errors": {
+                            "type": "array",
+                            "items": { "type": "string" },
+                            "example": ["policy_end_date cannot be before policy_start_date"]
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid file format, missing file, or import failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server or worker thread execution failure",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/policies": {
+      "get": {
+        "summary": "List All Policies with Pagination, Date Range Filtering, and Search",
+        "description": "Retrieves policies with populated user, account, carrier, category, and agent references. Supports pagination ('page', 'limit'), 'all=true' to bypass pagination, date range filtering ('startDate', 'endDate'), and keyword search ('search' / 'q').",
+        "tags": ["Policies"],
+        "parameters": [
+          { "name": "all", "in": "query", "required": false, "description": "Set to true to return all records without pagination", "schema": { "type": "boolean", "example": false } },
+          { "name": "page", "in": "query", "required": false, "description": "Page number (1-indexed)", "schema": { "type": "integer", "default": 1 } },
+          { "name": "limit", "in": "query", "required": false, "description": "Number of records per page", "schema": { "type": "integer", "default": 10 } },
+          { "name": "startDate", "in": "query", "required": false, "description": "Filter policies starting on or after this date (YYYY-MM-DD)", "schema": { "type": "string", "format": "date", "example": "2018-01-01" } },
+          { "name": "endDate", "in": "query", "required": false, "description": "Filter policies starting on or before this date (YYYY-MM-DD)", "schema": { "type": "string", "format": "date", "example": "2019-12-31" } },
+          { "name": "search", "in": "query", "required": false, "description": "Search keyword matching policyNumber, policyType, policyMode, producer, or csr", "schema": { "type": "string", "example": "Commercial" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Policies list and pagination metadata retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "example": true },
+                    "count": { "type": "integer", "example": 10 },
+                    "data": { "type": "array", "items": { "$ref": "#/components/schemas/PolicyDetail" } },
+                    "pagination": { "$ref": "#/components/schemas/PaginationMetadata" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/policies/search": {
+      "get": {
+        "summary": "Search Policies by User (Email or First Name)",
+        "description": "Performs an indexed search by user email (exact match) or first name (case-insensitive regex), joining the user's policies with associated accounts, carriers, categories, and agents. Supports pagination, 'all=true', date range ('startDate', 'endDate'), and keyword search ('search').",
+        "tags": ["Policies"],
+        "parameters": [
+          {
+            "name": "username",
+            "in": "query",
+            "required": true,
+            "description": "User email (e.g. 'madler@yahoo.ca') or user first name (e.g. 'Lura')",
+            "schema": {
+              "type": "string",
+              "example": "madler@yahoo.ca"
+            }
+          },
+          { "name": "all", "in": "query", "required": false, "description": "Set to true to bypass pagination", "schema": { "type": "boolean", "example": true } },
+          { "name": "page", "in": "query", "required": false, "description": "Page number (1-indexed)", "schema": { "type": "integer", "default": 1 } },
+          { "name": "limit", "in": "query", "required": false, "description": "Items per page", "schema": { "type": "integer", "default": 10 } },
+          { "name": "startDate", "in": "query", "required": false, "description": "Filter user policies starting on or after date (YYYY-MM-DD)", "schema": { "type": "string", "format": "date" } },
+          { "name": "endDate", "in": "query", "required": false, "description": "Filter user policies starting on or before date (YYYY-MM-DD)", "schema": { "type": "string", "format": "date" } },
+          { "name": "search", "in": "query", "required": false, "description": "Keyword search across policy fields", "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "User profile and associated insurance policies retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "example": true },
+                    "user": {
+                      "$ref": "#/components/schemas/User"
+                    },
+                    "policies": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/PolicyDetail"
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Missing or empty 'username' query parameter",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "No user or policies found matching query",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/policies/summary": {
+      "get": {
+        "summary": "Aggregated Policy Summary Grouped by User",
+        "description": "Executes a high-efficiency MongoDB aggregation pipeline that groups policies by user and computes total policy count, distinct policy categories, distinct policy carriers, earliest start date, latest end date, and rounded total premium.",
+        "tags": ["Policies"],
+        "parameters": [
+          { "name": "all", "in": "query", "required": false, "description": "Set to true to return all user summaries without pagination", "schema": { "type": "boolean", "example": false } },
+          { "name": "page", "in": "query", "required": false, "description": "Page number (1-indexed)", "schema": { "type": "integer", "default": 1 } },
+          { "name": "limit", "in": "query", "required": false, "description": "Number of records per page", "schema": { "type": "integer", "default": 10 } },
+          { "name": "startDate", "in": "query", "required": false, "description": "Filter summaries where policies started on or after date (YYYY-MM-DD)", "schema": { "type": "string", "format": "date", "example": "2018-01-01" } },
+          { "name": "endDate", "in": "query", "required": false, "description": "Filter summaries where policies started on or before date (YYYY-MM-DD)", "schema": { "type": "string", "format": "date", "example": "2019-12-31" } },
+          { "name": "search", "in": "query", "required": false, "description": "Keyword search matching user firstName, lastName, or email", "schema": { "type": "string", "example": "Cynthia" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Aggregated policy summary list and pagination metadata retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "example": true },
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/AggregatedUserPolicySummary"
+                      }
+                    },
+                    "pagination": {
+                      "$ref": "#/components/schemas/PaginationMetadata"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid pagination parameters ('limit' or 'page' not positive integers)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/policies/categories": {
+      "get": {
+        "summary": "List All Policy Categories (Lines of Business)",
+        "description": "Retrieves distinct policy categories with support for pagination ('page', 'limit'), 'all=true' to bypass pagination, date range filtering ('startDate', 'endDate' on createdAt), and keyword search ('search').",
+        "tags": ["Policies"],
+        "parameters": [
+          { "name": "all", "in": "query", "required": false, "description": "Set to true to return all categories without pagination", "schema": { "type": "boolean", "example": false } },
+          { "name": "page", "in": "query", "required": false, "description": "Page number (1-indexed)", "schema": { "type": "integer", "default": 1 } },
+          { "name": "limit", "in": "query", "required": false, "description": "Number of records per page", "schema": { "type": "integer", "default": 10 } },
+          { "name": "startDate", "in": "query", "required": false, "description": "Filter categories created on or after date (YYYY-MM-DD)", "schema": { "type": "string", "format": "date", "example": "2026-01-01" } },
+          { "name": "endDate", "in": "query", "required": false, "description": "Filter categories created on or before date (YYYY-MM-DD)", "schema": { "type": "string", "format": "date", "example": "2026-12-31" } },
+          { "name": "search", "in": "query", "required": false, "description": "Keyword search matching categoryName", "schema": { "type": "string", "example": "Auto" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of policy categories and pagination metadata retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "example": true },
+                    "count": { "type": "integer", "example": 10 },
+                    "categories": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "_id": { "type": "string", "example": "6abd41d4e071afde8b5c8145" },
+                          "categoryName": { "type": "string", "example": "Commercial Auto" },
+                          "createdAt": { "type": "string", "example": "2026-09-30T17:07:33.075Z" },
+                          "updatedAt": { "type": "string", "example": "2026-09-30T17:07:33.075Z" }
+                        }
+                      }
+                    },
+                    "pagination": { "$ref": "#/components/schemas/PaginationMetadata" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/policies/carriers": {
+      "get": {
+        "summary": "List All Policy Carriers (Insurance Companies)",
+        "description": "Retrieves distinct insurance policy carriers with support for pagination ('page', 'limit'), 'all=true' to bypass pagination, date range filtering ('startDate', 'endDate' on createdAt), and keyword search ('search').",
+        "tags": ["Policies"],
+        "parameters": [
+          { "name": "all", "in": "query", "required": false, "description": "Set to true to return all carriers without pagination", "schema": { "type": "boolean", "example": false } },
+          { "name": "page", "in": "query", "required": false, "description": "Page number (1-indexed)", "schema": { "type": "integer", "default": 1 } },
+          { "name": "limit", "in": "query", "required": false, "description": "Number of records per page", "schema": { "type": "integer", "default": 10 } },
+          { "name": "startDate", "in": "query", "required": false, "description": "Filter carriers created on or after date (YYYY-MM-DD)", "schema": { "type": "string", "format": "date", "example": "2026-01-01" } },
+          { "name": "endDate", "in": "query", "required": false, "description": "Filter carriers created on or before date (YYYY-MM-DD)", "schema": { "type": "string", "format": "date", "example": "2026-12-31" } },
+          { "name": "search", "in": "query", "required": false, "description": "Keyword search matching companyName", "schema": { "type": "string", "example": "Integon" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of policy carriers and pagination metadata retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "example": true },
+                    "count": { "type": "integer", "example": 10 },
+                    "carriers": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "_id": { "type": "string", "example": "6abd41d4e071afde8b5c8146" },
+                          "companyName": { "type": "string", "example": "Integon Gen Ins Corp" },
+                          "createdAt": { "type": "string", "example": "2026-09-30T17:07:33.081Z" },
+                          "updatedAt": { "type": "string", "example": "2026-09-30T17:07:33.081Z" }
+                        }
+                      }
+                    },
+                    "pagination": { "$ref": "#/components/schemas/PaginationMetadata" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/messages": {
+      "get": {
+        "summary": "List Scheduled Messages with Pagination, Date Range, and Search",
+        "description": "Retrieves scheduled messages with support for pagination ('page', 'limit'), 'all=true' to bypass pagination, date range filtering ('startDate', 'endDate' on scheduledAt), status filtering ('status'), and keyword search ('search').",
+        "tags": ["Messages"],
+        "parameters": [
+          { "name": "all", "in": "query", "required": false, "description": "Set to true to return all messages without pagination", "schema": { "type": "boolean", "example": false } },
+          { "name": "page", "in": "query", "required": false, "description": "Page number (1-indexed)", "schema": { "type": "integer", "default": 1 } },
+          { "name": "limit", "in": "query", "required": false, "description": "Number of records per page", "schema": { "type": "integer", "default": 10 } },
+          { "name": "startDate", "in": "query", "required": false, "description": "Filter messages scheduled on or after date (YYYY-MM-DD)", "schema": { "type": "string", "format": "date", "example": "2026-10-01" } },
+          { "name": "endDate", "in": "query", "required": false, "description": "Filter messages scheduled on or before date (YYYY-MM-DD)", "schema": { "type": "string", "format": "date", "example": "2026-10-31" } },
+          { "name": "status", "in": "query", "required": false, "description": "Filter by message status", "schema": { "type": "string", "enum": ["PENDING", "PROCESSING", "COMPLETED", "FAILED"] } },
+          { "name": "search", "in": "query", "required": false, "description": "Keyword search matching message content or status", "schema": { "type": "string", "example": "renewal" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Scheduled messages list and pagination metadata retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "example": true },
+                    "count": { "type": "integer", "example": 10 },
+                    "messages": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/ScheduledMessage" }
+                    },
+                    "pagination": { "$ref": "#/components/schemas/PaginationMetadata" }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Schedule a Message for Asynchronous Worker Execution",
+        "description": "Schedules a message to be executed at a specific day ('YYYY-MM-DD') and time ('HH:mm'). The message is claimed atomically by the Scheduled Message Worker using MongoDB document-level locking to prevent race conditions in clustered deployments.",
+        "tags": ["Messages"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "message": {
+                    "type": "string",
+                    "example": "Policy renewal reminder for next month"
+                  },
+                  "day": {
+                    "type": "string",
+                    "format": "date",
+                    "example": "2026-10-05",
+                    "description": "Date formatted as YYYY-MM-DD"
+                  },
+                  "time": {
+                    "type": "string",
+                    "example": "10:30",
+                    "description": "Time formatted as HH:mm or HH:mm:ss (24-hour format)"
+                  }
+                },
+                "required": ["message", "day", "time"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Message scheduled successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": { "type": "boolean", "example": true },
+                    "message": { "type": "string", "example": "Message scheduled successfully" },
+                    "data": {
+                      "$ref": "#/components/schemas/ScheduledMessage"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation error in message payload (e.g. missing fields or invalid date/time format)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StandardErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "User": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "example": "60d0fe4f5311236168a109ca" },
+          "firstName": { "type": "string", "example": "Lura Lucca" },
+          "email": { "type": "string", "example": "madler@yahoo.ca" },
+          "phone": { "type": "string", "example": "8677356559" },
+          "city": { "type": "string", "example": "MOCKSVILLE" },
+          "state": { "type": "string", "example": "NC" },
+          "zipCode": { "type": "string", "example": "27028" },
+          "userType": { "type": "string", "example": "Active Client" }
+        }
+      },
+      "PolicyDetail": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "example": "60d0fe4f5311236168a109cb" },
+          "policyNumber": { "type": "string", "example": "YEEX9MOIBU7X" },
+          "policyStartDate": { "type": "string", "example": "2018-11-02" },
+          "policyEndDate": { "type": "string", "example": "2019-11-02" },
+          "policyType": { "type": "string", "example": "Single" },
+          "policyMode": { "type": "string", "example": "12" },
+          "premiumAmount": { "type": "number", "example": 1180.83 },
+          "premiumAmountWritten": { "type": "number", "nullable": true, "example": null },
+          "producer": { "type": "string", "example": "Brandie Placencia" },
+          "csr": { "type": "string", "example": "Tami Ellison" },
+          "account": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string", "example": "60d0fe4f5311236168a109cc" },
+              "name": { "type": "string", "example": "Lura Lucca & Owen Dodson" },
+              "type": { "type": "string", "example": "Commercial" }
+            }
+          },
+          "carrier": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string", "example": "60d0fe4f5311236168a109cd" },
+              "name": { "type": "string", "example": "Integon Gen Ins Corp" }
+            }
+          },
+          "category": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string", "example": "60d0fe4f5311236168a109ce" },
+              "name": { "type": "string", "example": "Commercial Auto" }
+            }
+          },
+          "agent": {
+            "type": "object",
+            "properties": {
+              "id": { "type": "string", "example": "60d0fe4f5311236168a109cf" },
+              "name": { "type": "string", "example": "Alex Watson" }
+            }
+          }
+        }
+      },
+      "AggregatedUserPolicySummary": {
+        "type": "object",
+        "properties": {
+          "userId": { "type": "string", "example": "60d0fe4f5311236168a109ca" },
+          "firstName": { "type": "string", "example": "Cynthia Peters" },
+          "email": { "type": "string", "example": "eidac@hotmail.com" },
+          "totalPolicies": { "type": "integer", "example": 3 },
+          "categories": {
+            "type": "array",
+            "items": { "type": "string" },
+            "example": ["Homeowners", "Commercial Package", "Dwelling Fire"]
+          },
+          "carriers": {
+            "type": "array",
+            "items": { "type": "string" },
+            "example": ["Nationwide Mut Ins Co", "Nationwide Mut Fire Ins Co_Copy"]
+          },
+          "firstPolicyStartDate": { "type": "string", "example": "2018-03-21" },
+          "lastPolicyEndDate": { "type": "string", "example": "2020-01-09" },
+          "totalPremium": { "type": "number", "example": 11111.07 }
+        }
+      },
+      "ScheduledMessage": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "example": "6abd3b833c3f414aedb36a47" },
+          "message": { "type": "string", "example": "Policy renewal reminder for next month" },
+          "scheduledAt": { "type": "string", "format": "date-time", "example": "2026-10-05T05:00:00.000Z" },
+          "status": {
+            "type": "string",
+            "enum": ["PENDING", "PROCESSING", "COMPLETED", "FAILED"],
+            "example": "PENDING"
+          },
+          "createdAt": { "type": "string", "format": "date-time", "example": "2026-09-30T16:30:00.000Z" }
+        }
+      },
+      "PaginationMetadata": {
+        "type": "object",
+        "properties": {
+          "total": { "type": "integer", "example": 1198, "description": "Total records matching criteria" },
+          "page": { "type": "integer", "example": 1, "description": "Current page number (null when all=true)" },
+          "limit": { "type": "integer", "example": 10, "description": "Items per page (null when all=true)" },
+          "totalPages": { "type": "integer", "example": 120, "description": "Total available pages (1 when all=true)" },
+          "hasPrevPage": { "type": "boolean", "example": false },
+          "hasNextPage": { "type": "boolean", "example": true },
+          "all": { "type": "boolean", "example": false, "description": "True if full dataset was returned without pagination" }
+        }
+      },
+      "StandardErrorResponse": {
+        "type": "object",
+        "properties": {
+          "success": { "type": "boolean", "example": false },
+          "error": {
+            "type": "object",
+            "properties": {
+              "code": { "type": "string", "example": "VALIDATION_ERROR" },
+              "message": { "type": "string", "example": "Validation error in message payload" },
+              "details": {
+                "type": "array",
+                "items": { "type": "string" },
+                "example": ["Field \"day\" is required and must match format YYYY-MM-DD"]
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

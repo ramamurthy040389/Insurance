@@ -1,0 +1,1719 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Real-Time Scheduled Messages | Socket.IO Dashboard</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <script src="/socket.io/socket.io.js"></script>
+  <style>
+    :root {
+      --bg: #0b0f19;
+      --card-bg: rgba(22, 30, 49, 0.75);
+      --card-border: rgba(255, 255, 255, 0.08);
+      --text-main: #f8fafc;
+      --text-muted: #94a3b8;
+      --primary: #38bdf8;
+      --primary-hover: #0284c7;
+      --success: #10b981;
+      --warning: #f59e0b;
+      --danger: #ef4444;
+      --accent: #818cf8;
+      --card-hover-border: rgba(56, 189, 248, 0.3);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text-main);
+      font-family: 'Inter', sans-serif;
+      min-height: 100vh;
+      padding: 2rem 1.5rem;
+      background-image: 
+        radial-gradient(at 0% 0%, rgba(56, 189, 248, 0.12) 0px, transparent 50%),
+        radial-gradient(at 100% 100%, rgba(129, 140, 248, 0.1) 0px, transparent 50%);
+      background-attachment: fixed;
+    }
+
+    .container {
+      max-width: 1280px;
+      margin: 0 auto;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 2rem;
+      padding-bottom: 1.5rem;
+      border-bottom: 1px solid var(--card-border);
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+
+    .logo-box h1 {
+      font-size: 1.75rem;
+      font-weight: 800;
+      letter-spacing: -0.025em;
+      background: linear-gradient(135deg, #38bdf8 0%, #818cf8 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+    }
+
+    .logo-box p {
+      color: var(--text-muted);
+      font-size: 0.875rem;
+      margin-top: 0.25rem;
+    }
+
+    .status-badge {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.5rem 1rem;
+      border-radius: 9999px;
+      background: rgba(16, 185, 129, 0.1);
+      border: 1px solid rgba(16, 185, 129, 0.2);
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: var(--success);
+    }
+
+    .status-badge.disconnected {
+      background: rgba(239, 68, 68, 0.1);
+      border-color: rgba(239, 68, 68, 0.2);
+      color: var(--danger);
+    }
+
+    .pulse-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--success);
+      box-shadow: 0 0 10px var(--success);
+      animation: pulse 1.8s infinite;
+    }
+
+    .status-badge.disconnected .pulse-dot {
+      background: var(--danger);
+      box-shadow: 0 0 10px var(--danger);
+      animation: none;
+    }
+
+    @keyframes pulse {
+      0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+      70% { transform: scale(1.1); box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); }
+      100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1.25rem;
+      margin-bottom: 2rem;
+    }
+
+    @media (max-width: 900px) {
+      .grid { grid-template-columns: repeat(2, 1fr); }
+    }
+    @media (max-width: 550px) {
+      .grid { grid-template-columns: 1fr; }
+    }
+
+    .stat-card {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 1rem;
+      padding: 1.25rem;
+      backdrop-filter: blur(12px);
+      transition: border-color 0.2s, transform 0.2s;
+    }
+    .stat-card:hover {
+      border-color: var(--card-hover-border);
+      transform: translateY(-2px);
+    }
+
+    .stat-label {
+      font-size: 0.8125rem;
+      font-weight: 500;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    .stat-val {
+      font-size: 2rem;
+      font-weight: 800;
+      margin-top: 0.5rem;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .actions-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+
+    @media (max-width: 992px) {
+      .actions-grid { grid-template-columns: 1fr; }
+    }
+
+    .panel {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 1rem;
+      padding: 1.5rem;
+      backdrop-filter: blur(12px);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .panel-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 1.25rem;
+      padding-bottom: 0.75rem;
+      border-bottom: 1px solid var(--card-border);
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+
+    .panel-header h2 {
+      font-size: 1.125rem;
+      font-weight: 700;
+      letter-spacing: -0.01em;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .form-group {
+      margin-bottom: 1rem;
+    }
+
+    label {
+      display: block;
+      font-size: 0.8125rem;
+      font-weight: 600;
+      color: var(--text-muted);
+      margin-bottom: 0.375rem;
+    }
+
+    input, select, textarea {
+      width: 100%;
+      padding: 0.75rem 1rem;
+      background: rgba(15, 23, 42, 0.6);
+      border: 1px solid var(--card-border);
+      border-radius: 0.625rem;
+      color: var(--text-main);
+      font-family: inherit;
+      font-size: 0.875rem;
+      transition: all 0.2s;
+    }
+
+    input:focus, select:focus, textarea:focus {
+      outline: none;
+      border-color: var(--primary);
+      box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.2);
+    }
+
+    .row-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 0.75rem;
+    }
+
+    .quick-presets {
+      display: flex;
+      gap: 0.5rem;
+      margin-top: 0.5rem;
+      flex-wrap: wrap;
+    }
+
+    .preset-btn {
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--card-border);
+      color: var(--text-muted);
+      font-size: 0.75rem;
+      padding: 0.375rem 0.625rem;
+      border-radius: 0.5rem;
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .preset-btn:hover {
+      background: rgba(56, 189, 248, 0.15);
+      color: var(--primary);
+      border-color: rgba(56, 189, 248, 0.3);
+    }
+
+    .submit-btn {
+      width: 100%;
+      padding: 0.875rem;
+      margin-top: 1rem;
+      background: linear-gradient(135deg, var(--primary) 0%, #0284c7 100%);
+      color: #0b0f19;
+      font-size: 0.9375rem;
+      font-weight: 700;
+      border: none;
+      border-radius: 0.625rem;
+      cursor: pointer;
+      transition: transform 0.15s, box-shadow 0.15s, opacity 0.15s;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+    }
+
+    .submit-btn:hover:not(:disabled) {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 14px rgba(56, 189, 248, 0.35);
+    }
+
+    .submit-btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+      transform: none;
+      box-shadow: none;
+    }
+
+    /* CSV Upload Panel Styling */
+    .dropzone {
+      border: 2px dashed rgba(56, 189, 248, 0.3);
+      border-radius: 0.75rem;
+      padding: 1.5rem 1rem;
+      text-align: center;
+      background: rgba(15, 23, 42, 0.4);
+      cursor: pointer;
+      transition: all 0.2s ease;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0.5rem;
+    }
+
+    .dropzone:hover, .dropzone.dragover {
+      border-color: var(--primary);
+      background: rgba(56, 189, 248, 0.08);
+      box-shadow: 0 0 15px rgba(56, 189, 248, 0.2);
+    }
+
+    .dropzone-icon {
+      width: 44px;
+      height: 44px;
+      stroke: var(--primary);
+      stroke-width: 1.5;
+      fill: none;
+      margin-bottom: 0.25rem;
+    }
+
+    .dropzone-title {
+      font-size: 0.9375rem;
+      font-weight: 600;
+      color: var(--text-main);
+    }
+
+    .dropzone-subtitle {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+    }
+
+    .file-chip {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: rgba(56, 189, 248, 0.1);
+      border: 1px solid rgba(56, 189, 248, 0.3);
+      border-radius: 0.625rem;
+      padding: 0.75rem 1rem;
+      margin-top: 0.75rem;
+    }
+
+    .file-chip-info {
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+
+    .file-chip-name {
+      font-size: 0.875rem;
+      font-weight: 600;
+      color: var(--primary);
+    }
+
+    .file-chip-size {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .btn-remove-file {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      font-size: 1.125rem;
+      cursor: pointer;
+      padding: 0.25rem 0.5rem;
+      border-radius: 0.25rem;
+    }
+    .btn-remove-file:hover { color: var(--danger); }
+
+    .validation-alert {
+      padding: 0.75rem 1rem;
+      border-radius: 0.5rem;
+      font-size: 0.8125rem;
+      margin-top: 0.75rem;
+      display: flex;
+      align-items: flex-start;
+      gap: 0.5rem;
+    }
+
+    .validation-alert.error {
+      background: rgba(239, 68, 68, 0.12);
+      border: 1px solid rgba(239, 68, 68, 0.3);
+      color: #fca5a5;
+    }
+
+    .validation-alert.success {
+      background: rgba(16, 185, 129, 0.12);
+      border: 1px solid rgba(16, 185, 129, 0.3);
+      color: #6ee7b7;
+    }
+
+    .validation-alert.warning {
+      background: rgba(245, 158, 11, 0.12);
+      border: 1px solid rgba(245, 158, 11, 0.3);
+      color: #fcd34d;
+    }
+
+    .progress-bar-container {
+      margin-top: 1rem;
+      background: rgba(15, 23, 42, 0.8);
+      border-radius: 9999px;
+      height: 10px;
+      overflow: hidden;
+      border: 1px solid var(--card-border);
+      display: none;
+    }
+
+    .progress-bar {
+      height: 100%;
+      width: 0%;
+      background: linear-gradient(90deg, var(--primary) 0%, var(--accent) 100%);
+      transition: width 0.3s ease;
+    }
+
+    .upload-summary-card {
+      margin-top: 1rem;
+      padding: 1rem;
+      background: rgba(16, 185, 129, 0.08);
+      border: 1px solid rgba(16, 185, 129, 0.25);
+      border-radius: 0.75rem;
+      font-size: 0.8125rem;
+      display: none;
+    }
+
+    .summary-stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 0.5rem;
+      margin-top: 0.5rem;
+      text-align: center;
+    }
+
+    .summary-stat-box {
+      background: rgba(15, 23, 42, 0.6);
+      padding: 0.5rem;
+      border-radius: 0.375rem;
+      border: 1px solid var(--card-border);
+    }
+
+    .summary-stat-box strong {
+      display: block;
+      font-size: 1.125rem;
+      font-family: 'JetBrains Mono', monospace;
+      color: var(--text-main);
+    }
+
+    .summary-stat-box span {
+      font-size: 0.6875rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+    }
+
+    .entity-tags {
+      display: flex;
+      gap: 0.375rem;
+      flex-wrap: wrap;
+      margin-top: 0.75rem;
+    }
+
+    .entity-pill {
+      font-size: 0.75rem;
+      padding: 0.25rem 0.5rem;
+      background: rgba(255, 255, 255, 0.05);
+      border: 1px solid var(--card-border);
+      border-radius: 0.375rem;
+      color: var(--text-main);
+    }
+
+    /* Live Feed Styling */
+    .stream-feed-panel {
+      margin-bottom: 2rem;
+    }
+
+    .feed-box {
+      max-height: 180px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      padding-right: 0.25rem;
+    }
+
+    .feed-box::-webkit-scrollbar {
+      width: 6px;
+    }
+    .feed-box::-webkit-scrollbar-thumb {
+      background: rgba(255, 255, 255, 0.15);
+      border-radius: 3px;
+    }
+
+    .feed-item {
+      padding: 0.625rem 0.875rem;
+      background: rgba(15, 23, 42, 0.5);
+      border: 1px solid var(--card-border);
+      border-radius: 0.5rem;
+      font-size: 0.8125rem;
+      animation: fadeIn 0.3s ease;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(-4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .badge {
+      display: inline-block;
+      font-size: 0.6875rem;
+      font-weight: 700;
+      padding: 0.125rem 0.4rem;
+      border-radius: 0.25rem;
+      text-transform: uppercase;
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    .badge-scheduled { background: rgba(56, 189, 248, 0.15); color: var(--primary); }
+    .badge-dispatched { background: rgba(16, 185, 129, 0.15); color: var(--success); }
+    .badge-info { background: rgba(129, 140, 248, 0.15); color: var(--accent); }
+    .badge-warning { background: rgba(245, 158, 11, 0.15); color: var(--warning); }
+    .badge-error { background: rgba(239, 68, 68, 0.15); color: var(--danger); }
+
+    /* Table Container & Filter Toolbar */
+    .table-container {
+      background: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 1rem;
+      padding: 1.5rem;
+      backdrop-filter: blur(12px);
+    }
+
+    .table-toolbar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 0.75rem;
+      margin-bottom: 1.25rem;
+      flex-wrap: wrap;
+    }
+
+    .filter-group {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+    }
+
+    .search-input-box {
+      position: relative;
+      min-width: 240px;
+    }
+
+    .search-input-box input {
+      padding: 0.5rem 0.75rem 0.5rem 2rem;
+      font-size: 0.8125rem;
+      height: 38px;
+    }
+
+    .search-input-box svg {
+      position: absolute;
+      left: 0.625rem;
+      top: 50%;
+      transform: translateY(-50%);
+      width: 14px;
+      height: 14px;
+      stroke: var(--text-muted);
+      fill: none;
+      pointer-events: none;
+    }
+
+    .status-filter-select {
+      height: 38px;
+      padding: 0.5rem 0.75rem;
+      font-size: 0.8125rem;
+      width: auto;
+      min-width: 130px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.875rem;
+    }
+
+    th {
+      text-align: left;
+      padding: 0.75rem 1rem;
+      color: var(--text-muted);
+      font-weight: 600;
+      border-bottom: 1px solid var(--card-border);
+      font-size: 0.75rem;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+    }
+
+    td {
+      padding: 0.875rem 1rem;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+      vertical-align: middle;
+    }
+
+    tbody tr {
+      transition: background-color 0.15s;
+    }
+
+    tbody tr:hover {
+      background: rgba(255, 255, 255, 0.02);
+    }
+
+    .status-tag {
+      display: inline-block;
+      padding: 0.25rem 0.625rem;
+      border-radius: 9999px;
+      font-size: 0.6875rem;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+    }
+
+    .status-PENDING { background: rgba(245, 158, 11, 0.12); color: var(--warning); border: 1px solid rgba(245, 158, 11, 0.25); }
+    .status-COMPLETED { background: rgba(16, 185, 129, 0.12); color: var(--success); border: 1px solid rgba(16, 185, 129, 0.25); }
+    .status-PROCESSING { background: rgba(56, 189, 248, 0.12); color: var(--primary); border: 1px solid rgba(56, 189, 248, 0.25); }
+    .status-FAILED { background: rgba(239, 68, 68, 0.12); color: var(--danger); border: 1px solid rgba(239, 68, 68, 0.25); }
+
+    .btn-refresh {
+      background: transparent;
+      border: 1px solid var(--card-border);
+      color: var(--text-muted);
+      padding: 0.5rem 0.875rem;
+      border-radius: 0.5rem;
+      cursor: pointer;
+      font-size: 0.8125rem;
+      font-weight: 500;
+      transition: all 0.15s;
+      display: inline-flex;
+      align-items: center;
+      gap: 0.375rem;
+      height: 38px;
+    }
+    .btn-refresh:hover { color: var(--text-main); border-color: var(--primary); background: rgba(56, 189, 248, 0.05); }
+
+    /* Modern Pagination Bar Below Table */
+    .pagination-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-top: 1.5rem;
+      padding-top: 1.25rem;
+      border-top: 1px solid var(--card-border);
+      flex-wrap: wrap;
+      gap: 1rem;
+    }
+
+    .pagination-info {
+      font-size: 0.8125rem;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+      flex-wrap: wrap;
+    }
+
+    .page-size-selector {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.375rem;
+      color: var(--text-muted);
+      font-size: 0.8125rem;
+    }
+
+    .page-size-selector select {
+      width: auto;
+      padding: 0.25rem 0.5rem;
+      height: 32px;
+      font-size: 0.75rem;
+      border-radius: 0.375rem;
+    }
+
+    .pagination-controls {
+      display: flex;
+      align-items: center;
+      gap: 0.375rem;
+      flex-wrap: wrap;
+    }
+
+    .btn-page {
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid var(--card-border);
+      color: var(--text-main);
+      min-width: 34px;
+      height: 34px;
+      padding: 0 0.5rem;
+      border-radius: 0.5rem;
+      font-size: 0.8125rem;
+      font-weight: 500;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.15s;
+    }
+
+    .btn-page:hover:not(:disabled) {
+      background: rgba(56, 189, 248, 0.15);
+      border-color: var(--primary);
+      color: var(--primary);
+    }
+
+    .btn-page.active {
+      background: linear-gradient(135deg, var(--primary) 0%, #0284c7 100%);
+      color: #0b0f19;
+      font-weight: 700;
+      border-color: transparent;
+      box-shadow: 0 0 10px rgba(56, 189, 248, 0.4);
+    }
+
+    .btn-page:disabled {
+      opacity: 0.35;
+      cursor: not-allowed;
+      border-color: var(--card-border);
+    }
+
+    .page-jump-box {
+      display: flex;
+      align-items: center;
+      gap: 0.375rem;
+      margin-left: 0.5rem;
+      font-size: 0.8125rem;
+      color: var(--text-muted);
+    }
+
+    .page-jump-box input {
+      width: 50px;
+      height: 34px;
+      padding: 0.25rem;
+      text-align: center;
+      font-size: 0.8125rem;
+      border-radius: 0.375rem;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <div class="logo-box">
+        <h1>Insurance Policy Management</h1>
+        <p>Real-Time Scheduled Message Dispatcher & Data Ingestion System</p>
+      </div>
+      <div id="connectionStatus" class="status-badge disconnected">
+        <span class="pulse-dot"></span>
+        <span id="statusText">Connecting to Socket.IO...</span>
+      </div>
+    </header>
+
+    <!-- Top Metrics Grid -->
+    <div class="grid">
+      <div class="stat-card">
+        <div class="stat-label">Total Scheduled</div>
+        <div id="statTotal" class="stat-val" style="color: var(--primary);">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Pending Messages</div>
+        <div id="statPending" class="stat-val" style="color: var(--warning);">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Completed Messages</div>
+        <div id="statCompleted" class="stat-val" style="color: var(--success);">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Live Socket Events</div>
+        <div id="statEvents" class="stat-val" style="color: var(--accent);">0</div>
+      </div>
+    </div>
+
+    <!-- Actions Row: Message Scheduler + Bulk CSV Ingestion -->
+    <div class="actions-grid">
+      <!-- 1. Schedule Form Panel -->
+      <div class="panel">
+        <div>
+          <div class="panel-header">
+            <h2>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--primary);">
+                <circle cx="12" cy="12" r="10"></circle>
+                <polyline points="12 6 12 12 16 14"></polyline>
+              </svg>
+              Schedule New Message via Socket.IO
+            </h2>
+            <span class="badge badge-info">Real-time emit</span>
+          </div>
+          <form id="scheduleForm">
+            <div class="form-group">
+              <label for="msgText">Message Content</label>
+              <input type="text" id="msgText" required placeholder="e.g. Policy renewal reminder for next month" value="Automated Policy Renewal Reminder">
+            </div>
+            <div class="row-2">
+              <div class="form-group">
+                <label for="msgDay">Date (YYYY-MM-DD)</label>
+                <input type="date" id="msgDay" required>
+              </div>
+              <div class="form-group">
+                <label for="msgTime">Time (HH:mm)</label>
+                <input type="time" id="msgTime" required>
+              </div>
+            </div>
+            <div class="quick-presets">
+              <span style="font-size: 0.75rem; color: var(--text-muted); align-self: center;">Presets:</span>
+              <button type="button" class="preset-btn" onclick="setPreset(10)">In 10 Seconds</button>
+              <button type="button" class="preset-btn" onclick="setPreset(60)">In 1 Minute</button>
+              <button type="button" class="preset-btn" onclick="setPreset(3600)">In 1 Hour</button>
+            </div>
+            <button type="submit" class="submit-btn" id="btnSchedule">Schedule Message via Socket.IO</button>
+          </form>
+        </div>
+      </div>
+
+      <!-- 2. CSV / Excel File Upload Panel -->
+      <div class="panel">
+        <div>
+          <div class="panel-header">
+            <h2>
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--success);">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+                <polyline points="14 2 14 8 20 8"></polyline>
+                <line x1="16" y1="13" x2="8" y2="13"></line>
+                <line x1="16" y1="17" x2="8" y2="17"></line>
+                <polyline points="10 9 9 9 8 9"></polyline>
+              </svg>
+              Bulk CSV & Excel Data Ingestion
+            </h2>
+            <span class="badge badge-scheduled">Worker Thread</span>
+          </div>
+          <p style="font-size: 0.8125rem; color: var(--text-muted); margin-bottom: 0.75rem;">
+            Upload policy datasets (.csv, .xlsx, .xls up to 50MB). Offloaded asynchronously to dedicated Node.js Worker Threads with entity deduplication.
+          </p>
+
+          <!-- Dropzone -->
+          <div class="dropzone" id="csvDropzone" onclick="document.getElementById('csvFileInput').click()">
+            <svg class="dropzone-icon" viewBox="0 0 24 24">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="17 8 12 3 7 8"></polyline>
+              <line x1="12" y1="3" x2="12" y2="15"></line>
+            </svg>
+            <div class="dropzone-title">Click to browse or drag & drop CSV / Excel file here</div>
+            <div class="dropzone-subtitle">Supported: .csv, .xlsx, .xls &bull; Maximum file size: 50MB</div>
+            <input type="file" id="csvFileInput" accept=".csv, .xlsx, .xls" style="display: none;">
+          </div>
+
+          <!-- File Chip (when file selected) -->
+          <div id="fileChip" class="file-chip" style="display: none;">
+            <div class="file-chip-info">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--primary);">
+                <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"></path>
+                <polyline points="13 2 13 9 20 9"></polyline>
+              </svg>
+              <div>
+                <div id="chipFileName" class="file-chip-name">data-sheet.csv</div>
+                <div id="chipFileSize" class="file-chip-size">342.3 KB &bull; Text/CSV</div>
+              </div>
+            </div>
+            <button type="button" class="btn-remove-file" onclick="removeSelectedFile()" title="Remove file">&times;</button>
+          </div>
+
+          <!-- Validation Alert Container -->
+          <div id="csvValidationAlert" style="display: none;"></div>
+
+          <!-- Progress Bar -->
+          <div id="uploadProgressBarContainer" class="progress-bar-container">
+            <div id="uploadProgressBar" class="progress-bar"></div>
+          </div>
+          <div id="uploadStatusText" style="font-size: 0.75rem; color: var(--text-muted); margin-top: 0.375rem; text-align: center; display: none;"></div>
+
+          <!-- Ingestion Results Card -->
+          <div id="csvResultCard" class="upload-summary-card">
+            <div style="font-weight: 700; color: var(--success); display: flex; align-items: center; gap: 0.375rem;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"></polyline></svg>
+              Bulk Import Completed via Worker Thread
+            </div>
+            <div class="summary-stats-grid">
+              <div class="summary-stat-box">
+                <strong id="resTotalRows">0</strong>
+                <span>Total Rows</span>
+              </div>
+              <div class="summary-stat-box">
+                <strong id="resProcessed" style="color: var(--success);">0</strong>
+                <span>Processed</span>
+              </div>
+              <div class="summary-stat-box">
+                <strong id="resInserted" style="color: var(--primary);">0</strong>
+                <span>Inserted</span>
+              </div>
+              <div class="summary-stat-box">
+                <strong id="resFailed" style="color: var(--danger);">0</strong>
+                <span>Failed</span>
+              </div>
+            </div>
+            <div class="entity-tags" id="resEntitiesContainer"></div>
+          </div>
+
+          <!-- Upload Button -->
+          <button type="button" id="btnUploadCsv" class="submit-btn" disabled onclick="uploadCsvFile()">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="17 8 12 3 7 8"></polyline>
+              <line x1="12" y1="3" x2="12" y2="15"></line>
+            </svg>
+            Upload & Ingest via Worker Thread
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Live Event Feed Panel -->
+    <div class="panel stream-feed-panel">
+      <div class="panel-header">
+        <h2>
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--accent);">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+          </svg>
+          Live Socket.IO Stream Feed
+        </h2>
+        <div style="display: flex; gap: 0.5rem; align-items: center;">
+          <span style="font-size: 0.75rem; color: var(--text-muted);">Real-Time Updates</span>
+          <button type="button" class="btn-refresh" style="height: 28px; padding: 0.15rem 0.5rem; font-size: 0.75rem;" onclick="clearFeed()">Clear Feed</button>
+        </div>
+      </div>
+      <div id="eventFeed" class="feed-box">
+        <div class="feed-item">
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <span class="badge badge-info">INIT</span>
+            Waiting for Socket.IO connection...
+          </div>
+          <span style="color: var(--text-muted); font-size: 0.75rem;">--:--:--</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Messages Table Container with Toolbar and Pagination Below -->
+    <div class="table-container">
+      <div class="panel-header">
+        <h2>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--primary);">
+            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+            <line x1="16" y1="2" x2="16" y2="6"></line>
+            <line x1="8" y1="2" x2="8" y2="6"></line>
+            <line x1="3" y1="10" x2="21" y2="10"></line>
+          </svg>
+          Live Scheduled Messages Queue (<span id="tableCount">0</span> loaded &bull; Page <span id="headerPageNum">1</span> of <span id="headerTotalPages">1</span>)
+        </h2>
+        <div class="filter-group">
+          <div class="search-input-box">
+            <svg viewBox="0 0 24 24">
+              <circle cx="11" cy="11" r="8"></circle>
+              <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+            </svg>
+            <input type="text" id="tableSearchInput" placeholder="Search message content..." oninput="handleSearchInput(this.value)">
+          </div>
+          <select id="tableStatusSelect" class="status-filter-select" onchange="handleStatusChange(this.value)">
+            <option value="">All Statuses</option>
+            <option value="PENDING">PENDING</option>
+            <option value="COMPLETED">COMPLETED</option>
+            <option value="PROCESSING">PROCESSING</option>
+            <option value="FAILED">FAILED</option>
+          </select>
+          <button class="btn-refresh" onclick="refreshMessages()" title="Fetch current page via Socket.IO">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"></polyline><polyline points="1 20 1 14 7 14"></polyline><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"></path></svg>
+            Refresh
+          </button>
+          <a href="/api/v1/messages?all=true" target="_blank" class="btn-refresh" style="text-decoration: none;">View JSON API</a>
+        </div>
+      </div>
+
+      <div style="overflow-x: auto;">
+        <table>
+          <thead>
+            <tr>
+              <th style="width: 140px;">Status</th>
+              <th>Message Content</th>
+              <th style="width: 200px;">Scheduled For</th>
+              <th style="width: 130px;">Created At</th>
+            </tr>
+          </thead>
+          <tbody id="messagesTableBody">
+            <tr>
+              <td colspan="4" style="text-align: center; color: var(--text-muted); padding: 2.5rem;">Loading scheduled messages via Socket.IO...</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Pagination Component Below Table -->
+      <div class="pagination-bar">
+        <div class="pagination-info">
+          <span>Showing <strong id="rangeStart" style="color: var(--primary);">0</strong> to <strong id="rangeEnd" style="color: var(--primary);">0</strong> of <strong id="totalMessagesDisplay">0</strong> scheduled messages</span>
+          <div class="page-size-selector">
+            <span>Show</span>
+            <select id="pageSizeSelect" onchange="handlePageSizeChange(this.value)">
+              <option value="10">10</option>
+              <option value="25">25</option>
+              <option value="50" selected>50</option>
+              <option value="100">100</option>
+            </select>
+            <span>entries</span>
+          </div>
+        </div>
+
+        <div class="pagination-controls">
+          <button type="button" id="btnFirstPage" class="btn-page" onclick="goToPage(1)" title="First Page">&laquo;</button>
+          <button type="button" id="btnPrevPage" class="btn-page" onclick="goToPage(currentPage - 1)" title="Previous Page">&lsaquo;</button>
+          <div id="pageNumbersContainer" style="display: inline-flex; gap: 0.375rem;"></div>
+          <button type="button" id="btnNextPage" class="btn-page" onclick="goToPage(currentPage + 1)" title="Next Page">&rsaquo;</button>
+          <button type="button" id="btnLastPage" class="btn-page" onclick="goToPage(totalPages)" title="Last Page">&raquo;</button>
+          
+          <div class="page-jump-box">
+            <span>Go:</span>
+            <input type="number" id="jumpPageInput" min="1" placeholder="Page" onkeydown="if(event.key==='Enter') handleJumpPage()">
+            <button type="button" class="btn-page" style="height: 34px; padding: 0 0.625rem;" onclick="handleJumpPage()">Go</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let eventCount = 0;
+    const socket = io();
+
+    // Pagination & Filter State
+    let currentPage = 1;
+    let currentLimit = 50;
+    let totalRecords = 0;
+    let totalPages = 1;
+    let currentSearch = '';
+    let currentStatus = '';
+    let searchDebounceTimeout = null;
+
+    // Selected CSV/Excel File State
+    let selectedFile = null;
+
+    // Set default day & time to 2 minutes from now
+    function setDefaultDateTime() {
+      const now = new Date(Date.now() + 120000);
+      document.getElementById('msgDay').value = now.toISOString().slice(0, 10);
+      document.getElementById('msgTime').value = now.toTimeString().slice(0, 5);
+    }
+    setDefaultDateTime();
+
+    function setPreset(seconds) {
+      const future = new Date(Date.now() + seconds * 1000);
+      const year = future.getFullYear();
+      const month = String(future.getMonth() + 1).padStart(2, '0');
+      const day = String(future.getDate()).padStart(2, '0');
+      const hours = String(future.getHours()).padStart(2, '0');
+      const minutes = String(future.getMinutes()).padStart(2, '0');
+
+      document.getElementById('msgDay').value = `${year}-${month}-${day}`;
+      document.getElementById('msgTime').value = `${hours}:${minutes}`;
+      addFeedItem('PRESET', `Preset configured for ${hours}:${minutes}:${String(future.getSeconds()).padStart(2, '0')}`, 'badge-info');
+    }
+
+    function addFeedItem(badgeText, content, badgeClass = 'badge-info') {
+      eventCount++;
+      document.getElementById('statEvents').innerText = eventCount;
+      const feed = document.getElementById('eventFeed');
+      const item = document.createElement('div');
+      item.className = 'feed-item';
+      item.innerHTML = `
+        <div style="display: flex; align-items: center; gap: 0.5rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+          <span class="badge ${badgeClass}">${badgeText}</span>
+          <span>${content}</span>
+        </div>
+        <span style="color: var(--text-muted); font-size: 0.75rem; font-family: 'JetBrains Mono', monospace; flex-shrink: 0;">${new Date().toLocaleTimeString()}</span>
+      `;
+      feed.insertBefore(item, feed.firstChild);
+      if (feed.children.length > 50) feed.removeChild(feed.lastChild);
+    }
+
+    function clearFeed() {
+      const feed = document.getElementById('eventFeed');
+      feed.innerHTML = `
+        <div class="feed-item">
+          <div style="display: flex; align-items: center; gap: 0.5rem;">
+            <span class="badge badge-info">CLEARED</span>
+            Stream feed cleared.
+          </div>
+          <span style="color: var(--text-muted); font-size: 0.75rem;">${new Date().toLocaleTimeString()}</span>
+        </div>
+      `;
+    }
+
+    // ==========================================
+    // SOCKET.IO LIFECYCLE & REAL-TIME EVENTS
+    // ==========================================
+    socket.on('connect', () => {
+      const statusBadge = document.getElementById('connectionStatus');
+      statusBadge.className = 'status-badge';
+      document.getElementById('statusText').innerText = `Connected (Socket ID: ${socket.id.slice(0, 6)}...)`;
+      addFeedItem('CONNECTED', `Connected to server via WebSocket (ID: ${socket.id})`, 'badge-info');
+    });
+
+    socket.on('disconnect', () => {
+      const statusBadge = document.getElementById('connectionStatus');
+      statusBadge.className = 'status-badge disconnected';
+      document.getElementById('statusText').innerText = 'Disconnected from Server';
+      addFeedItem('DISCONNECTED', 'Connection to Socket.IO lost', 'badge-error');
+    });
+
+    // Initial Messages Received on Connect
+    socket.on('scheduled_messages_initial', (data) => {
+      addFeedItem('INITIAL_SYNC', `Received initial payload with ${data.count} messages`, 'badge-info');
+      if (data.stats) {
+        document.getElementById('statTotal').innerText = Number(data.stats.total || 0).toLocaleString();
+        document.getElementById('statPending').innerText = Number(data.stats.pending || 0).toLocaleString();
+        document.getElementById('statCompleted').innerText = Number(data.stats.completed || 0).toLocaleString();
+        totalRecords = data.stats.total || 0;
+      }
+
+      if (data.pagination) {
+        currentPage = data.pagination.page;
+        currentLimit = data.pagination.limit;
+        totalPages = data.pagination.totalPages;
+        totalRecords = data.pagination.total;
+        renderMessages(data.messages);
+        updatePaginationUI(data.pagination, data.messages ? data.messages.length : 0);
+      } else {
+        // Fallback: fetch page 1 cleanly with currentLimit
+        fetchMessagesPage(1, currentLimit);
+      }
+    });
+
+    // Real-Time Event: New Message Scheduled
+    socket.on('message_scheduled', (msg) => {
+      addFeedItem('SCHEDULED', `New message: "${msg.message}" for ${new Date(msg.scheduledAt).toLocaleString()}`, 'badge-scheduled');
+      
+      const totalEl = document.getElementById('statTotal');
+      const newTotal = parseInt((totalEl.innerText || '0').replace(/,/g, ''), 10) + 1;
+      totalEl.innerText = newTotal.toLocaleString();
+
+      const pendingEl = document.getElementById('statPending');
+      const newPending = parseInt((pendingEl.innerText || '0').replace(/,/g, ''), 10) + 1;
+      pendingEl.innerText = newPending.toLocaleString();
+
+      totalRecords++;
+      totalPages = Math.max(1, Math.ceil(totalRecords / currentLimit));
+
+      // If user is on page 1 and no search filter active, prepend row
+      if (currentPage === 1 && !currentSearch && !currentStatus) {
+        prependMessageRow(msg);
+      } else {
+        // Refresh pagination display
+        updatePaginationDisplayOnly();
+      }
+    });
+
+    // Real-Time Event: Message Dispatched / Executed
+    socket.on('message_dispatched', (msg) => {
+      addFeedItem('DISPATCHED', `Task executed! "${msg.message}" marked COMPLETED`, 'badge-dispatched');
+
+      const pendingEl = document.getElementById('statPending');
+      const curPending = parseInt((pendingEl.innerText || '0').replace(/,/g, ''), 10);
+      if (curPending > 0) pendingEl.innerText = (curPending - 1).toLocaleString();
+
+      const completedEl = document.getElementById('statCompleted');
+      const curCompleted = parseInt((completedEl.innerText || '0').replace(/,/g, ''), 10);
+      completedEl.innerText = (curCompleted + 1).toLocaleString();
+
+      updateMessageStatusInTable(msg.id || msg._id, 'COMPLETED');
+    });
+
+    // Real-Time Event: Bulk CSV Import Completed
+    socket.on('bulk_import_completed', (data) => {
+      addFeedItem('CSV_IMPORT', `Bulk import completed for "${data.filename}": ${data.summary.processed} rows processed, ${data.summary.inserted} policies inserted.`, 'badge-dispatched');
+      // Refresh messages page to reflect any new scheduled messages
+      fetchMessagesPage(currentPage, currentLimit);
+    });
+
+    // Schedule form submission via Socket.IO
+    document.getElementById('scheduleForm').addEventListener('submit', (e) => {
+      e.preventDefault();
+      const message = document.getElementById('msgText').value.trim();
+      const day = document.getElementById('msgDay').value;
+      const time = document.getElementById('msgTime').value;
+
+      const btn = document.getElementById('btnSchedule');
+      btn.disabled = true;
+      btn.innerText = 'Scheduling via Socket.IO...';
+
+      socket.emit('schedule_message', { message, day, time }, (response) => {
+        btn.disabled = false;
+        btn.innerText = 'Schedule Message via Socket.IO';
+
+        if (response && response.success) {
+          addFeedItem('SUCCESS', `Message acknowledged and saved to MongoDB: "${message}"`, 'badge-scheduled');
+        } else {
+          alert('Failed to schedule message: ' + (response.error || 'Unknown error'));
+        }
+      });
+    });
+
+    // ==========================================
+    // PAGINATION & TABLE QUERY LOGIC
+    // ==========================================
+    function fetchMessagesPage(page = 1, limit = currentLimit) {
+      const tbody = document.getElementById('messagesTableBody');
+      tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 2rem;">Fetching scheduled messages via Socket.IO...</td></tr>';
+
+      const payload = {
+        page,
+        limit
+      };
+      if (currentSearch) payload.search = currentSearch;
+      if (currentStatus) payload.status = currentStatus;
+
+      socket.emit('get_messages', payload, (res) => {
+        if (res && res.success) {
+          const pagination = res.pagination || {
+            page,
+            limit,
+            total: res.count,
+            totalPages: Math.ceil(res.count / limit) || 1,
+            hasNextPage: page < Math.ceil(res.count / limit),
+            hasPrevPage: page > 1
+          };
+
+          currentPage = pagination.page;
+          currentLimit = pagination.limit;
+          totalPages = pagination.totalPages;
+          totalRecords = pagination.total;
+
+          renderMessages(res.messages || []);
+          updatePaginationUI(pagination, res.messages ? res.messages.length : 0);
+          addFeedItem('PAGINATION', `Loaded page ${currentPage} of ${totalPages} (${res.count} records)`, 'badge-info');
+        } else {
+          tbody.innerHTML = `<tr><td colspan="4" style="text-align: center; color: var(--danger); padding: 2rem;">Failed to fetch messages: ${res ? res.error : 'Unknown socket error'}</td></tr>`;
+        }
+      });
+    }
+
+    function refreshMessages() {
+      fetchMessagesPage(currentPage, currentLimit);
+    }
+
+    function goToPage(page) {
+      if (page < 1 || (totalPages > 0 && page > totalPages)) return;
+      currentPage = page;
+      fetchMessagesPage(currentPage, currentLimit);
+    }
+
+    function handlePageSizeChange(newSize) {
+      currentLimit = parseInt(newSize, 10);
+      currentPage = 1;
+      fetchMessagesPage(1, currentLimit);
+    }
+
+    function handleSearchInput(value) {
+      clearTimeout(searchDebounceTimeout);
+      searchDebounceTimeout = setTimeout(() => {
+        currentSearch = value.trim();
+        currentPage = 1;
+        fetchMessagesPage(1, currentLimit);
+      }, 350);
+    }
+
+    function handleStatusChange(value) {
+      currentStatus = value;
+      currentPage = 1;
+      fetchMessagesPage(1, currentLimit);
+    }
+
+    function handleJumpPage() {
+      const val = parseInt(document.getElementById('jumpPageInput').value, 10);
+      if (!isNaN(val) && val >= 1 && val <= totalPages) {
+        goToPage(val);
+      } else {
+        alert(`Please enter a page number between 1 and ${totalPages}`);
+      }
+    }
+
+    function renderMessages(messages) {
+      const tbody = document.getElementById('messagesTableBody');
+      if (!messages || messages.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align: center; color: var(--text-muted); padding: 2.5rem;">No scheduled messages match the current query.</td></tr>';
+        document.getElementById('tableCount').innerText = '0';
+        return;
+      }
+
+      document.getElementById('tableCount').innerText = messages.length;
+      tbody.innerHTML = messages.map(m => createRowHtml(m)).join('');
+    }
+
+    function prependMessageRow(m) {
+      const tbody = document.getElementById('messagesTableBody');
+      const temp = document.createElement('tbody');
+      temp.innerHTML = createRowHtml(m);
+      if (tbody.children.length === 1 && tbody.children[0].children.length === 1) {
+        tbody.innerHTML = '';
+      }
+      tbody.insertBefore(temp.firstChild, tbody.firstChild);
+
+      // Maintain limit on table
+      if (tbody.children.length > currentLimit) {
+        tbody.removeChild(tbody.lastChild);
+      }
+
+      const countEl = document.getElementById('tableCount');
+      countEl.innerText = tbody.children.length;
+      updatePaginationDisplayOnly();
+    }
+
+    function updateMessageStatusInTable(id, newStatus) {
+      const row = document.getElementById(`msg-${id}`);
+      if (row) {
+        const tag = row.querySelector('.status-tag');
+        if (tag) {
+          tag.className = `status-tag status-${newStatus}`;
+          tag.innerText = newStatus;
+        }
+      }
+    }
+
+    function createRowHtml(m) {
+      const id = m._id || m.id;
+      const sched = m.scheduledAt ? new Date(m.scheduledAt).toLocaleString() : '-';
+      const created = m.createdAt ? new Date(m.createdAt).toLocaleTimeString() : '-';
+      const status = m.status || 'PENDING';
+      return `
+        <tr id="msg-${id}">
+          <td><span class="status-tag status-${status}">${status}</span></td>
+          <td><strong>${escapeHtml(m.message || '-')}</strong></td>
+          <td style="font-family: 'JetBrains Mono', monospace; font-size: 0.8125rem;">${sched}</td>
+          <td style="color: var(--text-muted); font-size: 0.75rem;">${created}</td>
+        </tr>
+      `;
+    }
+
+    function escapeHtml(str) {
+      return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#039;');
+    }
+
+    function updatePaginationUI(pagination, loadedCount) {
+      const page = pagination.page || 1;
+      const limit = pagination.limit || currentLimit;
+      const total = pagination.total !== undefined ? pagination.total : totalRecords;
+      const pages = pagination.totalPages !== undefined ? pagination.totalPages : (Math.ceil(total / limit) || 1);
+
+      document.getElementById('headerPageNum').innerText = page;
+      document.getElementById('headerTotalPages').innerText = pages;
+      document.getElementById('totalMessagesDisplay').innerText = total.toLocaleString();
+
+      const start = total === 0 ? 0 : (page - 1) * limit + (loadedCount > 0 ? 1 : 0);
+      const end = total === 0 ? 0 : Math.min(total, (page - 1) * limit + loadedCount);
+
+      document.getElementById('rangeStart').innerText = start.toLocaleString();
+      document.getElementById('rangeEnd').innerText = end.toLocaleString();
+
+      // Update button states
+      document.getElementById('btnFirstPage').disabled = page <= 1;
+      document.getElementById('btnPrevPage').disabled = page <= 1;
+      document.getElementById('btnNextPage').disabled = page >= pages;
+      document.getElementById('btnLastPage').disabled = page >= pages;
+
+      // Render Numbered Page Pills
+      const container = document.getElementById('pageNumbersContainer');
+      container.innerHTML = '';
+
+      const maxButtons = 5;
+      let startPage = Math.max(1, page - Math.floor(maxButtons / 2));
+      let endPage = startPage + maxButtons - 1;
+      if (endPage > pages) {
+        endPage = pages;
+        startPage = Math.max(1, endPage - maxButtons + 1);
+      }
+
+      if (startPage > 1) {
+        const btn1 = createPageBtn(1, page);
+        container.appendChild(btn1);
+        if (startPage > 2) {
+          const ellipsis = document.createElement('span');
+          ellipsis.innerText = '...';
+          ellipsis.style.alignSelf = 'center';
+          ellipsis.style.color = 'var(--text-muted)';
+          ellipsis.style.padding = '0 0.25rem';
+          container.appendChild(ellipsis);
+        }
+      }
+
+      for (let p = startPage; p <= endPage; p++) {
+        container.appendChild(createPageBtn(p, page));
+      }
+
+      if (endPage < pages) {
+        if (endPage < pages - 1) {
+          const ellipsis = document.createElement('span');
+          ellipsis.innerText = '...';
+          ellipsis.style.alignSelf = 'center';
+          ellipsis.style.color = 'var(--text-muted)';
+          ellipsis.style.padding = '0 0.25rem';
+          container.appendChild(ellipsis);
+        }
+        const btnLast = createPageBtn(pages, page);
+        container.appendChild(btnLast);
+      }
+
+      document.getElementById('jumpPageInput').max = pages;
+    }
+
+    function createPageBtn(pageNum, activePage) {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = `btn-page ${pageNum === activePage ? 'active' : ''}`;
+      btn.innerText = pageNum;
+      btn.onclick = () => goToPage(pageNum);
+      return btn;
+    }
+
+    function updatePaginationDisplayOnly() {
+      const total = totalRecords;
+      const pages = Math.max(1, Math.ceil(total / currentLimit));
+      document.getElementById('headerPageNum').innerText = currentPage;
+      document.getElementById('headerTotalPages').innerText = pages;
+      document.getElementById('totalMessagesDisplay').innerText = total.toLocaleString();
+
+      const tbody = document.getElementById('messagesTableBody');
+      const loadedCount = tbody.children.length;
+      const start = total === 0 ? 0 : (currentPage - 1) * currentLimit + (loadedCount > 0 ? 1 : 0);
+      const end = total === 0 ? 0 : Math.min(total, (currentPage - 1) * currentLimit + loadedCount);
+
+      document.getElementById('rangeStart').innerText = start.toLocaleString();
+      document.getElementById('rangeEnd').innerText = end.toLocaleString();
+    }
+
+    // ==========================================
+    // CSV FILE UPLOADER & CLIENT VALIDATION
+    // ==========================================
+    const dropzone = document.getElementById('csvDropzone');
+    const fileInput = document.getElementById('csvFileInput');
+
+    // Drag and drop event listeners
+    ['dragenter', 'dragover'].forEach(eventName => {
+      dropzone.addEventListener(eventName, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropzone.classList.add('dragover');
+      });
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+      dropzone.addEventListener(eventName, (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        dropzone.classList.remove('dragover');
+      });
+    });
+
+    dropzone.addEventListener('drop', (e) => {
+      const files = e.dataTransfer.files;
+      if (files && files.length > 0) {
+        processSelectedFile(files[0]);
+      }
+    });
+
+    fileInput.addEventListener('change', (e) => {
+      if (e.target.files && e.target.files.length > 0) {
+        processSelectedFile(e.target.files[0]);
+      }
+    });
+
+    function processSelectedFile(file) {
+      selectedFile = null;
+      hideAlert();
+      hideResultCard();
+
+      if (!file) return;
+
+      const filename = file.name;
+      const ext = filename.slice(filename.lastIndexOf('.')).toLowerCase();
+      const allowedExtensions = ['.csv', '.xlsx', '.xls'];
+      const maxSizeBytes = 50 * 1024 * 1024; // 50MB
+
+      // 1. File Extension Validation
+      if (!allowedExtensions.includes(ext)) {
+        showAlert('error', `Invalid file type "${ext}". Only .csv, .xlsx, and .xls files are supported.`);
+        fileInput.value = '';
+        return;
+      }
+
+      // 2. Empty File Validation
+      if (file.size === 0) {
+        showAlert('error', 'The selected file is empty (0 bytes). Please select a valid dataset.');
+        fileInput.value = '';
+        return;
+      }
+
+      // 3. File Size Limit Validation (50MB)
+      if (file.size > maxSizeBytes) {
+        const sizeMb = (file.size / (1024 * 1024)).toFixed(2);
+        showAlert('error', `File size (${sizeMb} MB) exceeds maximum limit of 50 MB.`);
+        fileInput.value = '';
+        return;
+      }
+
+      // Valid file selected
+      selectedFile = file;
+      showFileChip(file);
+
+      // 4. Pre-flight Header Validation for CSV files
+      if (ext === '.csv') {
+        preScanCsvHeader(file);
+      } else {
+        showAlert('success', `✓ File "${filename}" verified. Ready for Worker Thread multi-entity ingestion.`);
+        document.getElementById('btnUploadCsv').disabled = false;
+      }
+    }
+
+    function preScanCsvHeader(file) {
+      const reader = new FileReader();
+      const blob = file.slice(0, 1024 * 4); // Read first 4KB for header row inspection
+
+      reader.onload = (e) => {
+        try {
+          const text = e.target.result;
+          const firstLine = text.split(/\r\n|\n|\r/)[0];
+          if (!firstLine) {
+            showAlert('warning', 'Could not read header row. File will be validated on upload.');
+            document.getElementById('btnUploadCsv').disabled = false;
+            return;
+          }
+
+          const rawHeaders = firstLine.split(',').map(h => h.trim().replace(/^["']|["']$/g, '').toLowerCase().replace(/[\s_\-.]/g, ''));
+          
+          // Check for key canonical fields
+          const hasPolicy = rawHeaders.some(h => ['policynumber', 'policy', 'policies', 'policyno'].includes(h));
+          const hasUser = rawHeaders.some(h => ['firstname', 'username', 'user', 'clientname', 'name', 'insured'].includes(h));
+          const hasCarrier = rawHeaders.some(h => ['companyname', 'policycarriers', 'carrier', 'carriername'].includes(h));
+          const hasCategory = rawHeaders.some(h => ['categoryname', 'policycategories', 'category', 'lob'].includes(h));
+
+          let matched = [];
+          if (hasPolicy) matched.push('Policy #');
+          if (hasUser) matched.push('User/Client');
+          if (hasCarrier) matched.push('Carrier');
+          if (hasCategory) matched.push('Category');
+
+          if (hasPolicy && hasUser) {
+            showAlert('success', `✓ Pre-flight Header Validation Passed: Found standard headers (${matched.join(', ')}). Ready for ingestion.`);
+          } else {
+            showAlert('warning', `⚠️ Pre-flight Note: Standard columns (${matched.join(', ')}) detected. The worker thread will use flexible fuzzy header mapping.`);
+          }
+        } catch (err) {
+          showAlert('info', 'File selected. Ready to upload and offload to Worker Thread.');
+        }
+        document.getElementById('btnUploadCsv').disabled = false;
+      };
+
+      reader.onerror = () => {
+        showAlert('info', 'File selected. Ready to upload.');
+        document.getElementById('btnUploadCsv').disabled = false;
+      };
+
+      reader.readAsText(blob);
+    }
+
+    function showFileChip(file) {
+      document.getElementById('chipFileName').innerText = file.name;
+      const sizeStr = file.size > 1024 * 1024 
+        ? `${(file.size / (1024 * 1024)).toFixed(2)} MB`
+        : `${(file.size / 1024).toFixed(1)} KB`;
+      document.getElementById('chipFileSize').innerText = `${sizeStr} &bull; ${file.type || 'Spreadsheet'}`;
+      document.getElementById('fileChip').style.display = 'flex';
+    }
+
+    function removeSelectedFile() {
+      selectedFile = null;
+      fileInput.value = '';
+      document.getElementById('fileChip').style.display = 'none';
+      document.getElementById('btnUploadCsv').disabled = true;
+      hideAlert();
+      hideResultCard();
+    }
+
+    function showAlert(type, message) {
+      const box = document.getElementById('csvValidationAlert');
+      box.className = `validation-alert ${type}`;
+      box.innerHTML = `<span>${message}</span>`;
+      box.style.display = 'flex';
+    }
+
+    function hideAlert() {
+      document.getElementById('csvValidationAlert').style.display = 'none';
+    }
+
+    function hideResultCard() {
+      document.getElementById('csvResultCard').style.display = 'none';
+    }
+
+    // Perform Upload via XMLHttpRequest to show real upload progress
+    function uploadCsvFile() {
+      if (!selectedFile) {
+        showAlert('error', 'Please select a CSV or Excel file to upload.');
+        return;
+      }
+
+      const btn = document.getElementById('btnUploadCsv');
+      const progressContainer = document.getElementById('uploadProgressBarContainer');
+      const progressBar = document.getElementById('uploadProgressBar');
+      const statusText = document.getElementById('uploadStatusText');
+
+      btn.disabled = true;
+      btn.innerText = 'Ingesting via Worker Thread...';
+      progressContainer.style.display = 'block';
+      statusText.style.display = 'block';
+      progressBar.style.width = '15%';
+      statusText.innerText = 'Step 1/3: Uploading spreadsheet to server...';
+      hideAlert();
+      hideResultCard();
+
+      addFeedItem('CSV_UPLOAD', `Initiating bulk import for "${selectedFile.name}"`, 'badge-scheduled');
+
+      const formData = new FormData();
+      formData.append('file', selectedFile);
+
+      const xhr = new XMLHttpRequest();
+      xhr.open('POST', '/api/v1/policies/import', true);
+
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) {
+          const percent = Math.round((e.loaded / e.total) * 60);
+          progressBar.style.width = `${Math.max(15, percent)}%`;
+          if (percent >= 60) {
+            statusText.innerText = 'Step 2/3: Worker Thread spawned - parsing records & deduplicating entities...';
+          }
+        }
+      };
+
+      xhr.onload = () => {
+        progressBar.style.width = '100%';
+        btn.disabled = false;
+        btn.innerText = 'Upload & Ingest via Worker Thread';
+
+        try {
+          const res = JSON.parse(xhr.responseText);
+          if (xhr.status === 200 && res.success) {
+            statusText.innerText = 'Step 3/3: Bulk upsert complete!';
+            displayUploadResults(res);
+            addFeedItem('CSV_SUCCESS', `Ingested "${selectedFile.name}": ${res.summary.processed} rows processed, ${res.summary.inserted} policies inserted.`, 'badge-dispatched');
+            
+            // Refresh messages table
+            refreshMessages();
+          } else {
+            const errMsg = res.error && res.error.message ? res.error.message : (res.error || 'Upload failed');
+            showAlert('error', `Import Error: ${errMsg}`);
+            statusText.innerText = 'Import failed';
+            addFeedItem('CSV_ERROR', `Import failed for "${selectedFile.name}": ${errMsg}`, 'badge-error');
+          }
+        } catch (e) {
+          showAlert('error', `Server error (${xhr.status}): Unable to parse server response.`);
+          statusText.innerText = 'Error occurred during processing';
+        }
+
+        setTimeout(() => {
+          progressContainer.style.display = 'none';
+          statusText.style.display = 'none';
+        }, 3000);
+      };
+
+      xhr.onerror = () => {
+        btn.disabled = false;
+        btn.innerText = 'Upload & Ingest via Worker Thread';
+        progressContainer.style.display = 'none';
+        statusText.style.display = 'none';
+        showAlert('error', 'Network error occurred while connecting to the server.');
+      };
+
+      xhr.send(formData);
+    }
+
+    function displayUploadResults(res) {
+      const summary = res.summary || {};
+      document.getElementById('resTotalRows').innerText = (summary.totalRows || 0).toLocaleString();
+      document.getElementById('resProcessed').innerText = (summary.processed || 0).toLocaleString();
+      document.getElementById('resInserted').innerText = (summary.inserted || 0).toLocaleString();
+      document.getElementById('resFailed').innerText = (summary.failed || 0).toLocaleString();
+
+      const entitiesBox = document.getElementById('resEntitiesContainer');
+      entitiesBox.innerHTML = '';
+
+      if (summary.insertedCounts) {
+        const counts = summary.insertedCounts;
+        const pills = [
+          { label: 'Users', count: counts.users },
+          { label: 'Agents', count: counts.agents },
+          { label: 'Accounts', count: counts.accounts },
+          { label: 'Categories', count: counts.categories },
+          { label: 'Carriers', count: counts.carriers },
+          { label: 'Scheduled Msgs', count: counts.scheduledMessages }
+        ];
+
+        pills.forEach(p => {
+          if (p.count > 0) {
+            const pill = document.createElement('span');
+            pill.className = 'entity-pill';
+            pill.innerHTML = `<strong>+${p.count}</strong> ${p.label}`;
+            entitiesBox.appendChild(pill);
+          }
+        });
+      }
+
+      document.getElementById('csvResultCard').style.display = 'block';
+      showAlert('success', `✓ Successfully ingested ${summary.processed} records into MongoDB via Worker Thread!`);
+    }
+  </script>
+</body>
+</html>
