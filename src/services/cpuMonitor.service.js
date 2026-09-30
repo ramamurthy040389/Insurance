@@ -1,4 +1,5 @@
 const os = require('os');
+const { broadcast } = require('../config/socket');
 const env = require('../config/env');
 const logger = require('../utils/logger');
 
@@ -57,6 +58,7 @@ class CpuMonitorService {
   async checkCpuUsage() {
     try {
       const cpuPercent = this.calculateCpuPercent();
+      broadcast('cpu_usage', { cpuPercent });
       const mem = process.memoryUsage();
       const memoryMb = (mem.rss / (1024 * 1024)).toFixed(2);
 

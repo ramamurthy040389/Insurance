@@ -132,13 +132,14 @@ function parseXlsxFile(filePath) {
  * Main worker execution function
  */
 async function processImport() {
-  const { filePath, originalname, mongoUri } = workerData;
+  const { filePath, originalname, mongoUri, checkOnly } = workerData || {};
   const ext = path.extname(originalname || filePath).toLowerCase();
 
   console.log(`\n===============================================================`);
   console.log(`[IMPORT WORKER] [START] Initiating bulk import via Worker Thread`);
   console.log(`  - File: ${originalname || filePath}`);
   console.log(`  - Extension: ${ext}`);
+  console.log(`  - Mode: ${checkOnly ? 'CHECK_ONLY (Dry-Run)' : 'FULL_IMPORT'}`);
   console.log(`  - MongoDB URI: ${mongoUri ? mongoUri.replace(/\/\/.*@/, '//***:***@') : 'N/A'}`);
   console.log(`===============================================================`);
 
@@ -147,6 +148,7 @@ async function processImport() {
     processed: 0,
     inserted: 0,
     updated: 0,
+    duplicates: 0,
     skipped: 0,
     failed: 0,
     insertedCounts: {
@@ -223,15 +225,23 @@ async function processImport() {
     console.log(`[IMPORT WORKER] [HEADERS] Header validation passed. Found all required column mappings.`);
 
     // 4. Preload Existing Entities from DB into in-memory caches to prevent N+1 queries and guarantee deduplication
-    const [existingAgents, existingUsers, existingAccounts, existingCategories, existingCarriers] = await Promise.all([
+    const [existingAgents, existingUsers, existingAccounts, existingCategories, existingCarriers, existingPolicies] = await Promise.all([
       Agent.find({}).lean(),
       User.find({}).lean(),
       Account.find({}).lean(),
       PolicyCategory.find({}).lean(),
-      PolicyCarrier.find({}).lean()
+      PolicyCarrier.find({}).lean(),
+      Policy.find({}, { policyNumber: 1 }).lean()
     ]);
 
-    // Build lookup maps (safe against missing or malformed fields in existing records)
+    // Build lookup maps for duplicate checks and relational resolution
+    const existingPolicySet = new Set();
+    existingPolicies.forEach((p) => {
+      if (p.policyNumber) {
+        existingPolicySet.add(p.policyNumber.trim().toLowerCase());
+      }
+    });
+
     const agentCache = new Map();
     existingAgents.forEach((a) => {
       if (a.agent_name) agentCache.set(a.agent_name.trim().toLowerCase(), a._id);
@@ -266,12 +276,16 @@ async function processImport() {
       if (c.companyName) carrierCache.set(c.companyName.trim().toLowerCase(), c._id);
     });
 
-    console.log(`[IMPORT WORKER] [PRELOAD] Preloaded existing master entities from MongoDB:`);
+    console.log(`[IMPORT WORKER] [PRELOAD] Preloaded existing master entities and policies from MongoDB:`);
+    console.log(`  - Existing Policies in DB: ${existingPolicySet.size}`);
     console.log(`  - Agents: ${agentCache.size}`);
     console.log(`  - Users: ${userCacheByEmail.size}`);
     console.log(`  - Accounts: ${accountCache.size}`);
     console.log(`  - Categories: ${categoryCache.size}`);
     console.log(`  - Carriers: ${carrierCache.size}`);
+
+    // Set to track unique policy numbers encountered within this import file
+    const policyNumberSetInFile = new Set();
 
     // Track newly prepared items to insert in bulk
     const newAgentsToInsert = new Map();      // agent_name.toLowerCase() -> doc
@@ -351,6 +365,41 @@ async function processImport() {
         console.warn(`[IMPORT WORKER] [VALIDATION ERROR] Row ${rowNum} rejected: ${rowErrors.join('; ')}`);
         continue;
       }
+
+      // DUPLICATE CHECK: Do not allow duplicate policies to be uploaded
+      const canonicalPolicyNum = policyNumber.trim().toLowerCase();
+
+      // 1. Check duplicate within the same import file
+      if (policyNumberSetInFile.has(canonicalPolicyNum)) {
+        summary.duplicates++;
+        summary.skipped++;
+        validationErrors.push({
+          row: rowNum,
+          policyNumber,
+          isDuplicate: true,
+          duplicateType: 'FILE_DUPLICATE',
+          errors: [`Duplicate policy blocked: Policy number '${policyNumber}' appears more than once in this file.`]
+        });
+        console.warn(`[IMPORT WORKER] [DUPLICATE BLOCKED - FILE] Row ${rowNum}: Policy '${policyNumber}' duplicate in file.`);
+        continue;
+      }
+
+      // 2. Check duplicate against existing policies in database
+      if (existingPolicySet.has(canonicalPolicyNum)) {
+        summary.duplicates++;
+        summary.skipped++;
+        validationErrors.push({
+          row: rowNum,
+          policyNumber,
+          isDuplicate: true,
+          duplicateType: 'DB_DUPLICATE',
+          errors: [`Duplicate policy blocked: Policy number '${policyNumber}' already exists in database.`]
+        });
+        console.warn(`[IMPORT WORKER] [DUPLICATE BLOCKED - DB] Row ${rowNum}: Policy '${policyNumber}' already exists in database.`);
+        continue;
+      }
+
+      policyNumberSetInFile.add(canonicalPolicyNum);
 
       // Deduplicate & Stage Master Entities
       // 1. Agent
@@ -517,8 +566,55 @@ async function processImport() {
 
     console.log(`[IMPORT WORKER] [NORMALIZE] Row validation and normalization completed:`);
     console.log(`  - Total Rows: ${summary.totalRows}`);
-    console.log(`  - Valid Rows: ${validRows.length}`);
+    console.log(`  - Valid Rows (Ready to Insert): ${validRows.length}`);
+    console.log(`  - Duplicates Blocked: ${summary.duplicates}`);
     console.log(`  - Rejected Rows: ${validationErrors.length}`);
+
+    // If checkOnly (dry-run duplicate inspection), return duplicate report without modifying database
+    if (checkOnly) {
+      console.log(`[IMPORT WORKER] [CHECK ONLY] Dry-run duplicate check completed. Skipping database mutations.`);
+      const [totalAgents, totalUsers, totalAccounts, totalCategories, totalCarriers, totalPolicies, totalMessages] = await Promise.all([
+        Agent.countDocuments(),
+        User.countDocuments(),
+        Account.countDocuments(),
+        PolicyCategory.countDocuments(),
+        PolicyCarrier.countDocuments(),
+        Policy.countDocuments(),
+        ScheduledMessage.countDocuments()
+      ]);
+
+      const resultMessage = summary.duplicates > 0 && validRows.length === 0
+        ? `Duplicate check failed: All ${summary.duplicates} records in this file already exist in the database. Upload is not allowed.`
+        : summary.duplicates > 0
+        ? `Duplicate check complete: Found ${summary.duplicates} duplicate records and ${validRows.length} new records ready for upload.`
+        : `Duplicate check passed: All ${validRows.length} records are unique and ready for upload.`;
+
+      parentPort.postMessage({
+        success: true,
+        checkOnly: true,
+        canUpload: validRows.length > 0,
+        message: resultMessage,
+        summary: {
+          totalRows: summary.totalRows,
+          duplicates: summary.duplicates,
+          newRecords: validRows.length,
+          failed: summary.failed,
+          skipped: summary.skipped
+        },
+        entities: {
+          agents: totalAgents,
+          users: totalUsers,
+          accounts: totalAccounts,
+          categories: totalCategories,
+          carriers: totalCarriers,
+          policies: totalPolicies,
+          scheduledMessages: totalMessages
+        },
+        validationErrors
+      });
+      return;
+    }
+
     console.log(`[IMPORT WORKER] [DEDUP] Distinct master entities staged for insertion:`);
     console.log(`  - New Agents to Insert: ${newAgentsToInsert.size}`);
     console.log(`  - New Users to Insert: ${newUsersToInsert.size}`);
@@ -612,25 +708,11 @@ async function processImport() {
       );
     }
 
-    // 7. Policy Bulk Write / Idempotent Upsert with Strict Referential Integrity
+    // 7. Policy Bulk Write with Strict Referential Integrity (Only Unique New Policies)
     const policyBulkOps = [];
-    const policyNumberSetInFile = new Set();
 
     for (const item of validRows) {
       const p = item.parsed;
-
-      // Handle duplicate policy within the same file
-      if (policyNumberSetInFile.has(p.policyNumber)) {
-        summary.skipped++;
-        validationErrors.push({
-          row: item.rowNum,
-          policyNumber: p.policyNumber,
-          errors: [`Duplicate policy_number '${p.policyNumber}' found within the same import file`]
-        });
-        console.warn(`[IMPORT WORKER] [DUPLICATE POLICY] Row ${item.rowNum}: Duplicate policy_number '${p.policyNumber}' in file.`);
-        continue;
-      }
-      policyNumberSetInFile.add(p.policyNumber);
 
       // Verify Referential Integrity
       if (!p.userId) {
@@ -698,7 +780,7 @@ async function processImport() {
       policyBulkOps.push({
         updateOne: {
           filter: { policyNumber: p.policyNumber },
-          update: { $set: policyDoc },
+          update: { $setOnInsert: policyDoc },
           upsert: true
         }
       });
@@ -709,15 +791,13 @@ async function processImport() {
       summary.inserted = bulkResult.upsertedCount || 0;
       summary.updated = bulkResult.modifiedCount || 0;
       summary.insertedCounts.policies = summary.inserted;
-      const matchedCount = bulkResult.matchedCount || 0;
-      const unchanged = matchedCount - summary.updated;
-      summary.processed = summary.inserted + summary.updated + unchanged;
+      summary.processed = summary.inserted;
       console.log(
-        `[IMPORT WORKER] [INSERT] 'policies' bulk write complete: ${summary.inserted} inserted, ${summary.updated} updated, ${unchanged} unchanged.`
+        `[IMPORT WORKER] [INSERT] 'policies' bulk write complete: ${summary.inserted} inserted, ${summary.duplicates} duplicates blocked.`
       );
     } else {
       summary.processed = 0;
-      console.warn(`[IMPORT WORKER] [INSERT] No valid policies were prepared for bulk write.`);
+      console.warn(`[IMPORT WORKER] [INSERT] No new unique policies were prepared for bulk write (all were duplicates or invalid).`);
     }
 
     // 7b. Automatically generate and insert Scheduled Messages for imported policies into 'scheduledmessages'
@@ -791,8 +871,18 @@ async function processImport() {
     console.log(`===============================================================\n`);
 
     // 9. Send success message to parent thread
+    let resultMessage = 'Import completed successfully.';
+    if (summary.totalRows > 0 && summary.duplicates === summary.totalRows) {
+      resultMessage = `Duplicate upload prevented: All ${summary.duplicates} policy records already exist in the database.`;
+    } else if (summary.duplicates > 0) {
+      resultMessage = `Import completed: ${summary.inserted} new policies inserted, ${summary.duplicates} duplicate records blocked.`;
+    } else if (summary.inserted > 0) {
+      resultMessage = `Import completed: ${summary.inserted} policies successfully inserted.`;
+    }
+
     parentPort.postMessage({
       success: true,
+      message: resultMessage,
       summary,
       entities: {
         agents: totalAgents,

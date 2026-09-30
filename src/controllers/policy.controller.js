@@ -22,6 +22,23 @@ class PolicyController {
   }
 
   /**
+   * POST /api/v1/policies/check-duplicates
+   * Inspects a CSV / XLSX file for duplicate records against database without mutating data
+   */
+  async checkDuplicates(req, res, next) {
+    try {
+      if (!req.file) {
+        throw ApiError.badRequest('Please attach a CSV or XLSX file with field name "file"');
+      }
+
+      const result = await importService.processFileInWorker(req.file, { checkOnly: true });
+      return res.status(200).json(result);
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  /**
    * GET /api/v1/policies
    * List all policies with pagination, all=true, date range filtering, and keyword search
    */

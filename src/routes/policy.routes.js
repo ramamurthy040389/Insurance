@@ -7,6 +7,7 @@ const { validateSearchQuery, validateSummaryQuery } = require('../validators/pol
 // POST /api/v1/policies/import & /upload (Multipart upload processed via Worker Thread)
 router.post('/import', upload.single('file'), policyController.importPolicies);
 router.post('/upload', upload.single('file'), policyController.importPolicies);
+router.post('/check-duplicates', upload.single('file'), policyController.checkDuplicates);
 
 // GET /api/v1/policies (List all policies with pagination, all=true, date range, search)
 router.get('/', policyController.getPolicies);

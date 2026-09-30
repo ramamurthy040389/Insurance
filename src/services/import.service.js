@@ -9,27 +9,31 @@ class ImportService {
    * Spawns a dedicated Worker Thread to parse and import CSV / XLSX files
    * Keeps the main Express event loop responsive
    */
-  async processFileInWorker(file) {
+  async processFileInWorker(file, options = {}) {
     if (!file || !file.path) {
       throw ApiError.badRequest('No file provided for import');
     }
 
+    const checkOnly = Boolean(options.checkOnly);
     const workerPath = path.resolve(__dirname, '../workers/import.worker.js');
 
     logger.info({
       filename: file.originalname,
       size: file.size,
-      mimetype: file.mimetype
-    }, 'Starting bulk import via Worker Thread');
+      mimetype: file.mimetype,
+      checkOnly
+    }, checkOnly ? 'Starting duplicate check via Worker Thread' : 'Starting bulk import via Worker Thread');
 
-    try {
-      const { broadcast } = require('../config/socket');
-      broadcast('bulk_import_started', {
-        filename: file.originalname,
-        size: file.size,
-        timestamp: new Date().toISOString()
-      });
-    } catch (_) {}
+    if (!checkOnly) {
+      try {
+        const { broadcast } = require('../config/socket');
+        broadcast('bulk_import_started', {
+          filename: file.originalname,
+          size: file.size,
+          timestamp: new Date().toISOString()
+        });
+      } catch (_) {}
+    }
 
     return new Promise((resolve, reject) => {
       const worker = new Worker(workerPath, {
@@ -37,6 +41,7 @@ class ImportService {
           filePath: file.path,
           originalname: file.originalname,
           mimetype: file.mimetype,
+          checkOnly,
           mongoUri: (process.env.NODE_ENV === 'test' 
             ? (process.env.MONGODB_URI_TEST || 'mongodb://127.0.0.1:27017/insurance_test') 
             : env.MONGODB_URI)
@@ -47,17 +52,20 @@ class ImportService {
         if (result.success) {
           logger.info({
             summary: result.summary,
-            insertedCounts: result.summary.insertedCounts,
+            insertedCounts: result.summary ? result.summary.insertedCounts : null,
             entities: result.entities,
-            errorCount: result.validationErrors ? result.validationErrors.length : 0
-          }, 'Bulk import completed successfully in Worker Thread');
-          console.log(`[MAIN THREAD] [IMPORT SUCCESS] Bulk import completed:`);
-          console.log(`  - Total Rows in File: ${result.summary.totalRows}`);
-          console.log(`  - Successfully Processed: ${result.summary.processed}`);
-          console.log(`  - Policies Inserted: ${result.summary.inserted}`);
-          console.log(`  - Policies Updated: ${result.summary.updated}`);
-          console.log(`  - Failed / Rejected Rows: ${result.summary.failed}`);
-          if (result.summary.insertedCounts) {
+            errorCount: result.validationErrors ? result.validationErrors.length : 0,
+            checkOnly
+          }, checkOnly ? 'Duplicate check completed successfully' : 'Bulk import completed successfully in Worker Thread');
+          console.log(`[MAIN THREAD] [IMPORT ${checkOnly ? 'CHECK' : 'SUCCESS'}] File: ${file.originalname}:`);
+          console.log(`  - Total Rows in File: ${result.summary ? result.summary.totalRows : 0}`);
+          console.log(`  - Duplicates Blocked: ${result.summary ? result.summary.duplicates : 0}`);
+          if (!checkOnly) {
+            console.log(`  - Successfully Processed: ${result.summary ? result.summary.processed : 0}`);
+            console.log(`  - Policies Inserted: ${result.summary ? result.summary.inserted : 0}`);
+            console.log(`  - Failed / Rejected Rows: ${result.summary ? result.summary.failed : 0}`);
+          }
+          if (!checkOnly && result.summary && result.summary.insertedCounts) {
             console.log(`  - New Master Entities Inserted:`);
             console.log(`    * Users: ${result.summary.insertedCounts.users}`);
             console.log(`    * Agents: ${result.summary.insertedCounts.agents}`);
@@ -67,15 +75,18 @@ class ImportService {
           }
           console.log(`  - Verified Total Database Entity Counts:`, result.entities);
 
-          try {
-            const { broadcast } = require('../config/socket');
-            broadcast('bulk_import_completed', {
-              filename: file.originalname,
-              summary: result.summary,
-              entities: result.entities,
-              timestamp: new Date().toISOString()
-            });
-          } catch (_) {}
+          if (!checkOnly) {
+            try {
+              const { broadcast } = require('../config/socket');
+              broadcast('bulk_import_completed', {
+                filename: file.originalname,
+                summary: result.summary,
+                entities: result.entities,
+                message: result.message,
+                timestamp: new Date().toISOString()
+              });
+            } catch (_) {}
+          }
 
           resolve(result);
         } else {
